@@ -1,4 +1,5 @@
 import random
+import time
 from multiprocessing import Process, Queue
 
 def fermat(n):
@@ -34,7 +35,9 @@ def worker(worker_id, server_address):
     while True:
         # Wait for server to assign a number
         data = result_queue.get()
-        if data is None:
+        if data == worker_id:  # Ignore the worker's own signal
+            continue
+        elif data is None:
             break
 
         num = data
@@ -45,5 +48,5 @@ def worker(worker_id, server_address):
 
 if __name__ == "__main__":
     worker_id = 1  # Update with the worker's ID
-    server_address = "192.168.83.205"  # Update with the server's address
+    server_address = "localhost"  # Update with the server's address
     worker(worker_id, server_address)
