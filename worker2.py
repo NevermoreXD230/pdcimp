@@ -1,28 +1,22 @@
-import Pyro4
+import socket
+import pickle
 
-@Pyro4.expose
-class PrimeWorker:
-    def __init__(self):
-        pass
-    
-    def find_primes(self, start, end):
-        primes = []
-        for i in range(start, end+1):
-            for j in range(2, int(i**0.5)+1):
-                if (i % j) == 0:
-                    break
-            else:
-                primes.append(i)
-        return primes
+# Define a function to send a task to the server and receive the result
+def send_task(start, end):
+    # Set up the worker socket
+    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    worker_socket.connect(('192.168.83.185', 5000))
 
-def main():
-    worker = PrimeWorker()
-    daemon = Pyro4.Daemon(host="192.168.83.185")
-    uri = daemon.register(worker)
-    ns = Pyro4.locateNS(host="192.168.83.205")
-    ns.register("prime.worker2", uri)
+    # Send the task to the server and receive the result
+    task = (start, end)
+    worker_socket.sendall(pickle.dumps(task))
+    result = pickle.loads(worker_socket.recv(1024))
 
-    print("Prime worker 2 ready.")
-    daemon.requestLoop
-if __name__ == "__main__":
-    main()
+    # Clean up the socket
+    worker_socket.close()
+
+    return result
+
+# Send tasks to the server and receive results
+if __name__ == '__main__':
+    print(send_task(101, 200))
