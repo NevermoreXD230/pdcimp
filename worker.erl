@@ -1,26 +1,48 @@
 -module(worker).
--export([calculate_primes/2]).
+-export([start/0]).
 
-calculate_primes(Start, End) ->
-    [ N || N <- lists:seq(Start, End), is_prime(N) ].
+start() ->
+    Pid = spawn_link(fun() -> loop() end),
+    register(worker, Pid).
 
-is_prime(N) ->
-    case fermet(N) of
-        true -> true;
-        false -> false
+loop() ->
+    receive
+        {check, N} ->
+            Res = is_prime(N),
+            sender ! {result, N, Res},
+            loop()
     end.
 
-fermet(N) ->
-    A = random:uniform(N-1) + 1,
-    A == fast_exp(A, N-1, N).
+is_prime(2) ->
+    true;
+is_prime(3) ->
+    true;
+is_prime(N) when N > 3 ->
+    check_prime(N, 40).
 
-fast_exp(_, 0, _) ->
-    1;
-fast_exp(Base, Exponent, Mod) ->
-    case Exponent rem 2 of
-        0 ->
-            Result = fast_exp(Base, Exponent div 2, Mod),
-            (Result * Result) rem Mod;
+check_prime(N, 0) ->
+    false;
+check_prime(N, K) ->
+    A = rand:uniform(N-2) + 2,
+    case fermat_test(A, N) of
+        true ->
+            check_prime(N, K-1);
+        false ->
+            false
+    end.
+
+fermat_test(A, N) ->
+    case exp_mod(A, N-1, N) of
         1 ->
-            (Base * fast_exp(Base, Exponent - 1, Mod)) rem Mod
+            true;
+        _ ->
+            false
     end.
+
+exp_mod(_, 0, N) ->
+    1;
+exp_mod(Base, Exp, N) when Exp rem 2 =:= 0 ->
+    Temp = exp_mod(Base, Exp div 2, N),
+    (Temp * Temp) rem N;
+exp_mod(Base, Exp, N) ->
+    (Base * exp_mod(Base, Exp-1, N)) rem N.
