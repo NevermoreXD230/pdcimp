@@ -16,3 +16,26 @@ def start_worker(queue):
 
     # Clean up the socket
     worker_socket.close()
+
+# Modify the main block to send a sentinel value to stop the workers
+if __name__ == '__main__':
+    queue = Queue()
+
+    # Add tasks to the queue
+    queue.put((2, 100))
+    queue.put((101, 200))
+
+    # Add sentinel values to stop the workers
+    for _ in range(2):
+        queue.put(None)
+
+    # Start the workers
+    workers = []
+    for _ in range(2):
+        p = Process(target=start_worker, args=(queue,))
+        p.start()
+        workers.append(p)
+
+    # Wait for the worker processes to finish
+    for p in workers:
+        p.join()
