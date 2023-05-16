@@ -1,41 +1,39 @@
+import socket
+import pickle
+
 # Define a function to start a worker
-def start_worker(queue):
+def start_worker():
     # Set up the worker socket
     worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     worker_socket.connect(('192.168.83.205', 5000))
 
-    # Send tasks to the server and receive results
+    # Receive tasks from the server and send results back
     while True:
-        task = queue.get()
+        task = pickle.loads(worker_socket.recv(1024))
         if task is None:
             break
         start, end = task  # Unpack the task tuple
-        worker_socket.sendall(pickle.dumps(task))
-        result = pickle.loads(worker_socket.recv(1024))
-        print(result)
+
+        # Perform the computation to find prime numbers
+        primes = []
+        for num in range(start, end + 1):
+            if is_prime(num):
+                primes.append(num)
+
+        # Send the computed primes back to the server
+        worker_socket.sendall(pickle.dumps(primes))
 
     # Clean up the socket
     worker_socket.close()
 
-# Modify the main block to send a sentinel value to stop the workers
-if __name__ == '__main__':
-    queue = Queue()
+# Helper function to check if a number is prime
+def is_prime(num):
+    if num < 2:
+        return False
+    for i in range(2, int(num**0.5) + 1):
+        if num % i == 0:
+            return False
+    return True
 
-    # Add tasks to the queue
-    queue.put((2, 100))
-    queue.put((101, 200))
-
-    # Add sentinel values to stop the workers
-    for _ in range(2):
-        queue.put(None)
-
-    # Start the workers
-    workers = []
-    for _ in range(2):
-        p = Process(target=start_worker, args=(queue,))
-        p.start()
-        workers.append(p)
-
-    # Wait for the worker processes to finish
-    for p in workers:
-        p.join()
+# Start the worker
+start_worker()
