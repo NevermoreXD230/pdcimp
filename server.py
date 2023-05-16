@@ -1,4 +1,5 @@
 import random
+import time
 from multiprocessing import Process, Queue
 
 def fermat(n):
@@ -14,26 +15,25 @@ def fermat(n):
 
 def server(num_workers):
     primes_found = []
+    num_queue = Queue()
+    result_queue = Queue()
+    assigned_numbers = Queue()  # Queue for assigning numbers to workers
 
-    def worker_task(worker_id, result_queue):
+    def worker_task(worker_id):
         while True:
-            # Request a number from the server
-            result_queue.put(worker_id)  # Signal the server that the worker is ready
+            result_queue.put(worker_id)  # Signal worker availability to the server
 
-            num = num_queue.get()  # Wait for a number to test
+            num = assigned_numbers.get()  # Wait for a number to test
             if num is None:
                 break
 
             if fermat(num):
                 result_queue.put((worker_id, num))  # Report prime number to server
 
-    num_queue = Queue()
-    result_queue = Queue()
-
     # Start worker processes
     workers = []
     for i in range(num_workers):
-        p = Process(target=worker_task, args=(i, result_queue))
+        p = Process(target=worker_task, args=(i,))
         p.start()
         workers.append(p)
 
@@ -45,15 +45,17 @@ def server(num_workers):
         else:
             num_queue.put(next_number)  # Send number to the queue for testing
 
-        # Wait for a worker to become available
-        worker_id = result_queue.get()
-        if worker_id is not None:
-            num = num_queue.get()  # Get the number to assign to the worker
-            result_queue.put((worker_id, num))  # Send the number to the worker
+        # Assign numbers to available workers
+        while not num_queue.empty():
+            worker_id = result_queue.get()
+            if worker_id is not None:
+                num = num_queue.get()  # Get the number to assign to the worker
+                assigned_numbers.put(num)  # Assign the number to the worker
 
         while not result_queue.empty():
-            worker_id, prime = result_queue.get()
-            if worker_id != worker_id:  # Skip the signal from the worker
+            data = result_queue.get()
+            if isinstance(data, tuple):
+                worker_id, prime = data
                 primes_found.append(prime)
                 print(f"Worker {worker_id} found prime: {prime}")
 
@@ -61,7 +63,7 @@ def server(num_workers):
 
     # Stop worker processes
     for _ in range(num_workers):
-        num_queue.put(None)
+        assigned_numbers.put(None)
 
     for p in workers:
         p.join()
