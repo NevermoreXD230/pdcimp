@@ -1,39 +1,28 @@
-import socket
-import pickle
+import random
 
-# Define a function to start a worker
-def start_worker():
-    # Set up the worker socket
-    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    worker_socket.connect(('192.168.83.205', 5000))
+def fermat(n):
+    if n == 1:
+        return True
 
-    # Receive tasks from the server and send results back
-    while True:
-        task = pickle.loads(worker_socket.recv(1024))
-        if task is None:
-            break
-        start, end = task  # Unpack the task tuple
-
-        # Perform the computation to find prime numbers
-        primes = []
-        for num in range(start, end + 1):
-            if is_prime(num):
-                primes.append(num)
-
-        # Send the computed primes back to the server
-        worker_socket.sendall(pickle.dumps(primes))
-
-    # Clean up the socket
-    worker_socket.close()
-
-# Helper function to check if a number is prime
-def is_prime(num):
-    if num < 2:
-        return False
-    for i in range(2, int(num**0.5) + 1):
-        if num % i == 0:
+    for _ in range(10):  # Perform the test multiple times
+        r = random.randint(1, n-1)
+        if pow(r, n-1, n) != 1:
             return False
+
     return True
 
-# Start the worker
-start_worker()
+def worker(server_address):
+    while True:
+        # Receive number from the server for testing
+        num = int(input("Enter number to test (or -1 to exit): "))
+        if num == -1:
+            break
+
+        if fermat(num):
+            print(f"{num} is a prime number.")
+        else:
+            print(f"{num} is not a prime number.")
+
+if __name__ == "__main__":
+    server_address = "localhost"  # Update with the server's address
+    worker(server_address)
