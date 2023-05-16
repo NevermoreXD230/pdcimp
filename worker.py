@@ -25,10 +25,9 @@ def worker(worker_id, server_address):
             if data is None:
                 break
 
-            if isinstance(data, tuple):
-                num = data[1]  # Extract the assigned number
-                if fermat(num):
-                    result_queue.put((worker_id, num))  # Report prime number to server
+            num = data
+            if fermat(num):
+                result_queue.put((worker_id, num))  # Report prime number to server
 
     server_task_process = Process(target=server_task)
     server_task_process.start()
@@ -41,14 +40,14 @@ def worker(worker_id, server_address):
         elif data is None:
             break
 
-        if isinstance(data, tuple):
-            num = data[1]  # Extract the assigned number
-            if fermat(num):
-                print(f"Worker {worker_id} found prime: {num}")
+        num = data
+        if fermat(num
+        if fermat(num):
+            print(f"Worker {worker_id} found prime: {num}")
 
     server_task_process.join()
 
 if __name__ == "__main__":
     worker_id = 1  # Update with the worker's ID
-    server_address = "localhost"  # Update with the server's address
+    server_address = "192.168.83.205"  # Update with the server's address
     worker(worker_id, server_address)
