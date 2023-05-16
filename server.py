@@ -1,58 +1,55 @@
-import random
-import socket
+import Pyro4
 
-# Generate a large prime number
-def generate_prime():
-    p = random.randint(10**10, 10**11)
-    while not is_prime(p):
-        p += 1
-    return p
+@Pyro4.expose
+class PrimeServer:
+    def __init__(self):
+        self.workers = []
+    
+    def add_worker(self, worker_uri):
+        self.workers.append(worker_uri)
+    
+    def find_primes(self, start, end):
+        primes = []
+        for i in range(start, end+1):
+            for j in range(2, int(i**0.5)+1):
+                if (i % j) == 0:
+                    break
+            else:
+                primes.append(i)
+        return primes
 
-# Check if a number is prime
-def is_prime(n):
-    if n < 2:
-        return False
-    for i in range(2, int(n**0.5)+1):
-        if n % i == 0:
-            return False
-    return True
+    def distribute_workload(self, start, end):
+        workload_size = (end - start) // len(self.workers)
+        start_range = start
+        end_range = start_range + workload_size
 
-# Send prime number to worker
-def send_prime(prime, worker_ip, worker_port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((worker_ip, worker_port))
-        s.sendall(str(prime).encode())
+        jobs = []
+        for worker_uri in self.workers:
+            jobs.append((worker_uri, start_range, end_range))
+            start_range = end_range + 1
+            end_range = start_range + workload_size
 
-# Collect results from workers
-def collect_results(worker_ips, worker_ports):
-    results = []
-    for i in range(len(worker_ips)):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((worker_ips[i], worker_ports[i]))
-            s.listen()
-            conn, addr = s.accept()
-            with conn:
-                result = conn.recv(1024).decode()
-                results.append(result)
-    return results
+        # Handle remainder workload
+        if end_range - 1 < end:
+            jobs[-1] = (jobs[-1][0], jobs[-1][1], end)
 
-if __name__ == '__main__':
-    # Set worker IPs and ports
-    worker_ips = ['worker1_ip', 'worker2_ip']
-    worker_ports = [5000, 5000]
+        results = []
+        for worker_uri, start, end in jobs:
+            worker = Pyro4.Proxy(worker_uri)
+            result = worker.find_primes(start, end)
+            results.extend(result)
+        
+        return results
 
-    # Generate prime number
-    prime = generate_prime()
+def main():
+    server = PrimeServer()
+    daemon = Pyro4.Daemon(host="192.168.83.205")
+    uri = daemon.register(server)
+    ns = Pyro4.locateNS(host="192.168.83.205")
+    ns.register("prime.server", uri)
 
-    # Send prime number to workers
-    for i in range(len(worker_ips)):
-        send_prime(prime, worker_ips[i], worker_ports[i])
+    print("Prime server ready.")
+    daemon.requestLoop()
 
-    # Collect results from workers
-    results = collect_results(worker_ips, worker_ports)
-
-    # Output final result
-    if all(result == 'True' for result in results):
-        print('The generated number is a prime number')
-    else:
-        print('The generated number is not a prime number')
+if __name__ == "__main__":
+    main()
