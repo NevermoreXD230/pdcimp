@@ -1,34 +1,23 @@
 import socket
 import pickle
 
-# function to check if a number is prime
-def is_prime(n):
-    if n <= 1:
-        return False
-    for i in range(2, int(n**0.5)+1):
-        if n % i == 0:
-            return False
-    return True
+# Define a function to send a task to the server and receive the result
+def send_task(start, end):
+    # Set up the worker socket
+    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    worker_socket.connect(('192.168.83.205', 5000))
 
-def prime_numbers(start, end, ip, port):
-    results = []
-    for n in range(start, end):
-        if is_prime(n):
-            results.append(n)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((ip, port))
-        s.listen()
-        conn, addr = s.accept()
-        with conn:
-            data = pickle.dumps(results)
-            conn.sendall(data)
+    # Send the task to the server and receive the result
+    task = (start, end)
+    worker_socket.sendall(pickle.dumps(task))
+    result = pickle.loads(worker_socket.recv(1024))
 
+    # Clean up the socket
+    worker_socket.close()
+
+    return result
+
+# Send tasks to the server and receive results
 if __name__ == '__main__':
-    # define IP address and port to listen on
-    ip = '192.168.83.46'
-    port = 5000
-
-    # start listening for requests
-    while True:
-        print(f"Listening on {ip}:{port}")
-        prime_numbers(0, 0, ip, port)
+    print(send_task(2, 100))
+    print(send_task(101, 200))
