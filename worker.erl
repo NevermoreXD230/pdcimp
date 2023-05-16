@@ -1,48 +1,38 @@
 -module(worker).
--export([start/0]).
+-export([start/1]).
 
-start() ->
-    Pid = spawn_link(fun() -> loop() end),
-    register(worker, Pid).
+start(Server) ->
+    register(worker, spawn(fun() -> loop(Server) end)).
 
-loop() ->
+loop(Server) ->
     receive
-        {check, N} ->
-            Res = is_prime(N),
-            sender ! {result, N, Res},
-            loop()
+        {work, N} ->
+            Result = is_prime(N),
+            Server ! {result, self(), Result},
+            loop(Server);
+        stop ->
+            ok
     end.
 
-is_prime(2) ->
-    true;
-is_prime(3) ->
-    true;
-is_prime(N) when N > 3 ->
-    check_prime(N, 40).
+is_prime(N) ->
+    R = rand:uniform(N-1) + 1,
+    fermat(N, R).
 
-check_prime(N, 0) ->
-    false;
-check_prime(N, K) ->
-    A = rand:uniform(N-2) + 2,
-    case fermat_test(A, N) of
-        true ->
-            check_prime(N, K-1);
-        false ->
-            false
-    end.
-
-fermat_test(A, N) ->
-    case exp_mod(A, N-1, N) of
+fermat(N, A) ->
+    case mod_exp(A, N-1, N) of
         1 ->
             true;
         _ ->
             false
     end.
 
-exp_mod(_, 0, N) ->
+mod_exp(_, 0, Mod) ->
     1;
-exp_mod(Base, Exp, N) when Exp rem 2 =:= 0 ->
-    Temp = exp_mod(Base, Exp div 2, N),
-    (Temp * Temp) rem N;
-exp_mod(Base, Exp, N) ->
-    (Base * exp_mod(Base, Exp-1, N)) rem N.
+mod_exp(Base, Exp, Mod) ->
+    case Exp rem 2 of
+        0 ->
+            Temp = mod_exp(Base, Exp div 2, Mod),
+            (Temp * Temp) rem Mod;
+        1 ->
+            (Base * mod_exp(Base, Exp - 1, Mod)) rem Mod
+    end.
