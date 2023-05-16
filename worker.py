@@ -20,4 +20,3 @@ def send_task(start, end):
 # Send tasks to the server and receive results
 if __name__ == '__main__':
     print(send_task(2, 100))
-    print(send_task(101, 200))
