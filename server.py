@@ -1,76 +1,65 @@
 import socket
 import pickle
-from multiprocessing import Process, Queue
+import time
+import multiprocessing
 
-# Define a function to check if a number is prime
+# function to check if a number is prime
 def is_prime(n):
-    if n < 2:
+    if n <= 1:
         return False
     for i in range(2, int(n**0.5)+1):
         if n % i == 0:
             return False
     return True
 
-# Define a function to handle a connection from a worker
-def handle_connection(conn, queue):
-    while True:
-        task = conn.recv(1024)
-        if not task:
-            break
-        start, end = task
-        primes = []
-        for n in range(start, end+1):
-            if is_prime(n):
-                primes.append(n)
-        queue.put(primes)
-    conn.close()
+def prime_numbers(start, end):
+    return [n for n in range(start, end) if is_prime(n)]
 
-# Define a function to start the server
-def start_server():
-    # Set up the server socket
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server_socket.bind(('192.168.83.205', 5000))
-    server_socket.listen()
+def divide_range(num_workers, range_start, range_end):
+    range_size = range_end - range_start
+    chunk_size = range_size // num_workers
+    ranges = []
+    for i in range(num_workers):
+        chunk_start = range_start + i*chunk_size
+        if i < num_workers-1:
+            chunk_end = chunk_start + chunk_size
+        else:
+            chunk_end = range_end
+        ranges.append((chunk_start, chunk_end))
+    return ranges
 
-    # Create a queue to store the results from the workers
-    results_queue = Queue()
+if __name__ == '__main__':
+    # define IP addresses and ports of the workers
+    workers = [
+        ('192.168.83.46', 5000),
+        ('192.168.83.185', 5000)
+    ]
 
-    # Start two worker processes
-    workers = []
-    for i in range(2):
-        p = Process(target=start_worker, args=(results_queue,))
+    # define range of numbers to search for primes
+    start = 1000000000
+    end = 1000100000
+
+    # divide range into chunks for each worker
+    ranges = divide_range(len(workers), start, end)
+
+    # create a process for each worker
+    processes = []
+    for i, (ip, port) in enumerate(workers):
+        p = multiprocessing.Process(target=prime_numbers, args=(ranges[i][0], ranges[i][1], ip, port))
+        processes.append(p)
         p.start()
-        workers.append(p)
 
-    # Listen for connections from the workers
-    while True:
-        conn, addr = server_socket.accept()
-        p = Process(target=handle_connection, args=(conn, results_queue))
-        p.start()
-
-    # Wait for the worker processes to finish
-    for p in workers:
+    # wait for all processes to finish
+    for p in processes:
         p.join()
 
-# Define a function to start a worker
-def start_worker(queue):
-    # Set up the worker socket
-    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    worker_socket.connect(('192.168.83.205', 5000))
+    # combine results from all workers
+    results = []
+    for ip, port in workers:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((ip, port))
+            data = s.recv(1024)
+            results.extend(pickle.loads(data))
 
-    # Send tasks to the server and receive results
-    while True:
-        task = queue.get()
-        if task is None:
-            break
-        worker_socket.sendall(pickle.dumps(task))
-        result = pickle.loads(worker_socket.recv(1024))
-        print(result)
-
-    # Clean up the socket
-    worker_socket.close()
-
-# Start the server
-if __name__ == '__main__':
-    start_server()
+    # print the number of prime numbers found
+    print(f"{len(results)} prime numbers found in range {start} to {end}")
