@@ -1,4 +1,5 @@
 import random
+from multiprocessing import Process, Queue
 
 def fermat(n):
     if n == 1:
@@ -11,18 +12,38 @@ def fermat(n):
 
     return True
 
-def worker(server_address):
+def worker(worker_id, server_address):
+    result_queue = Queue()
+
+    def server_task():
+        while True:
+            # Signal worker availability to the server
+            result_queue.put(worker_id)
+
+            data = result_queue.get()  # Wait for server response
+            if data is None:
+                break
+
+            num = data
+            if fermat(num):
+                result_queue.put((worker_id, num))  # Report prime number to server
+
+    server_task_process = Process(target=server_task)
+    server_task_process.start()
+
     while True:
-        # Receive number from the server for testing
-        num = int(input("Enter number to test (or -1 to exit): "))
-        if num == -1:
+        # Wait for server to assign a number
+        data = result_queue.get()
+        if data is None:
             break
 
+        num = data
         if fermat(num):
-            print(f"{num} is a prime number.")
-        else:
-            print(f"{num} is not a prime number.")
+            print(f"Worker {worker_id} found prime: {num}")
+
+    server_task_process.join()
 
 if __name__ == "__main__":
-    server_address = "192.168.83.205"  # Update with the server's address
-    worker(server_address)
+    worker_id = 1  # Update with the worker's ID
+    server_address = "localhost"  # Update with the server's address
+    worker(worker_id, server_address)
