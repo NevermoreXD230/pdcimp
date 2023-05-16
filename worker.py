@@ -24,5 +24,5 @@ def worker(server_address):
             print(f"{num} is not a prime number.")
 
 if __name__ == "__main__":
-    server_address = "localhost"  # Update with the server's address
+    server_address = "192.168.83.205"  # Update with the server's address
     worker(server_address)
