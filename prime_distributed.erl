@@ -1,62 +1,65 @@
 -module(prime_distributed).
--export([main/2, worker/1]).
 
-main(N, P) ->
-    {StartTime, _} = erlang:statistics(wall_clock),
-    Res = master(N, P),
-    {EndTime, _} = erlang:statistics(wall_clock),
-    Time = EndTime - StartTime,
-    io:format("Total time taken: ~p ms.~n", [Time]),
-    Res.
+-export([start/2, master/4, worker/1, is_prime/1]).
 
-master(N, P) ->
-    Workers = spawn_workers(P),
-    ChunkSize = N div P,
-    Extra = N rem P,
-    Jobs = build_jobs(Workers, ChunkSize, Extra),
-    [W ! {self(), Job} || {W, Job} <- Jobs],
-    Results = collect_results(P, []),
-    lists:foldl(fun(Acc, X) -> Acc + X end, 0, Results).
+start(N, NumOfWorkers) ->
+    spawn(prime_distributed, master, [N, NumOfWorkers, self(), []]).
 
-spawn_workers(P) ->
-    lists:map(fun(_) -> spawn(?MODULE, worker, []) end, lists:seq(1, P)).
-
-build_jobs(Workers, ChunkSize, Extra) ->
-    Jobs = lists:duplicate(ChunkSize, 0),
-    case Extra of
-        0 ->
-            fill_jobs(Jobs, Workers);
-        _ ->
-            fill_jobs(Jobs ++ [0], Workers) ++ [fill_jobs([0], Workers)]
-    end.
-
-fill_jobs(Jobs, Workers) ->
-    lists:zip(Workers, lists:map(fun(List) -> [fermet:is_prime(N) || N <- List] end, split_list(Jobs))).
-
-split_list(List) ->
-    case lists:split(length(List) div 2, List) of
-        {Left, []} ->
-            [Left];
-        {Left, Right} ->
-            [Left | split_list(Right)]
-    end.
-
-collect_results(0, Acc) ->
-    lists:reverse(Acc);
-collect_results(P, Acc) ->
-    receive
-        {_, Result} ->
-            collect_results(P-1, [Result|Acc])
-    end.
+master(N, NumOfWorkers, Parent, PrimeList) ->
+    K = trunc(math:sqrt(N))+1,
+    Lists = lists:foldl(
+        fun(K_, Lists_) ->
+            Start = (K_-1)*K + 1,
+            End = K_*K,
+            [ {Start_, End_} || Start_ <- lists:seq(Start, N, K_), End_ <- lists:seq(Start_, min(End, N)), Start_ =< End_ ] ++ Lists_
+        end,
+        [], lists:seq(1,K)),
+    Workers = [ spawn(prime_distributed, worker, []) || _ <- lists:seq(1,NumOfWorkers)],
+    spawn_link(prime_distributed, collector, [Parent, length(Lists), PrimeList]),
+    lists:foreach(
+        fun(List_) ->
+            {Worker, WorkersRest} = lists:split(1, Workers),
+            Worker ! {self(), List_},
+            Workers = WorkersRest
+        end,
+        Lists),
+    ok.
 
 worker() ->
     receive
-        {Master, [P1, P2|Ps]} ->
-            Master ! {self(), [fermet:is_prime(P1), fermet:is_prime(P2)]},
-            worker();
-        {Master, [P]} ->
-            Master ! {self(), [fermet:is_prime(P)]},
-            worker();
-        stop ->
-            ok
-    end.
+        {Parent, {Start, End}} ->
+            Parent ! {self(), [ N || N <- lists:seq(Start,End), is_prime(N) =:= true ]}
+    end,
+    worker().
+
+collector(Parent, NumOfWorkers, PrimeList) ->
+    receive
+        {From, List} ->
+            collector(Parent, NumOfWorkers, PrimeList ++ List);
+        {'EXIT', _, _} ->
+            {_, WorkersRest} = lists:split(1, lists:droplast(NumOfWorkers, [spawn(prime_distributed, worker, []) || _ <- lists:seq(1,NumOfWorkers) ])),
+            lists:foreach(
+                fun(Worker_) -> Worker_ ! stop end,
+                WorkersRest),
+            exit(killed)
+    after
+        5000 ->
+            {_, WorkersRest} = lists:split(1, lists:droplast(NumOfWorkers, [spawn(prime_distributed, worker, []) || _ <- lists:seq(1,NumOfWorkers) ])),
+            lists:foreach(
+                fun(Worker_) -> Worker_ ! stop end,
+                WorkersRest),
+            exit(timeout)
+    end,
+    Parent ! {primes, PrimeList},
+    exit(normal).
+
+is_prime(N) when N > 1 ->
+    is_prime(N, 2, trunc(math:sqrt(N))+1).
+
+is_prime(N, K, Max) when K < Max ->
+    case N rem K of
+        0 -> false;
+        _ -> is_prime(N, K+1, Max)
+    end;
+is_prime(_, _, _) ->
+    true.
