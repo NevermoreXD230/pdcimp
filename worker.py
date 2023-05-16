@@ -45,5 +45,5 @@ def worker(worker_id, server_address):
 
 if __name__ == "__main__":
     worker_id = 1  # Update with the worker's ID
-    server_address = "localhost"  # Update with the server's address
+    server_address = "192.168.83.205"  # Update with the server's address
     worker(worker_id, server_address)
