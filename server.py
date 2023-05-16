@@ -14,7 +14,7 @@ def is_prime(n):
 # Define a function to handle a connection from a worker
 def handle_connection(conn, queue):
     while True:
-        task = conn.recv(1024)
+        task = pickle.loads(conn.recv(1024))
         if not task:
             break
         start, end = task
@@ -57,7 +57,7 @@ def start_server():
 def start_worker(queue):
     # Set up the worker socket
     worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    worker_socket.connect(('192.168.83.205', 5000))
+    worker_socket.connect(('192.168.83.46', 5000))
 
     # Send tasks to the server and receive results
     while True:
