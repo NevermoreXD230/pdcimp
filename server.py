@@ -1,8 +1,6 @@
 import socket
 import pickle
-from multiprocessing import Process, Queue
 
-# Define a function to check if a number is prime
 def is_prime(n):
     if n < 2:
         return False
@@ -11,66 +9,50 @@ def is_prime(n):
             return False
     return True
 
-# Define a function to handle a connection from a worker
-def handle_connection(conn, queue):
-    while True:
-        task = pickle.loads(conn.recv(1024))
-        if not task:
-            break
-        start, end = task
-        primes = []
-        for n in range(start, end+1):
-            if is_prime(n):
-                primes.append(n)
-        queue.put(primes)
-    conn.close()
+def generate_primes(start, end):
+    primes = []
+    for num in range(start, end+1):
+        if is_prime(num):
+            primes.append(num)
+    return primes
 
-# Define a function to start the server
 def start_server():
     # Set up the server socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(('192.168.83.205', 5000))
     server_socket.listen()
 
-    # Create a queue to store the results from the workers
-    results_queue = Queue()
-
-    # Start two worker processes
-    workers = []
-    for i in range(2):
-        p = Process(target=start_worker, args=(results_queue,))
-        p.start()
-        workers.append(p)
-
-    # Listen for connections from the workers
-    while True:
+    # Accept connections from the workers
+    worker_connections = []
+    for _ in range(2):
         conn, addr = server_socket.accept()
-        p = Process(target=handle_connection, args=(conn, results_queue))
-        p.start()
+        worker_connections.append(conn)
 
-    # Wait for the worker processes to finish
-    for p in workers:
-        p.join()
+    # Generate primes and distribute tasks to the workers
+    start = 2
+    end = 1000000
+    chunk_size = (end - start) // len(worker_connections)
+    tasks = [(start + i * chunk_size, start + (i + 1) * chunk_size) for i in range(len(worker_connections))]
+    tasks[-1] = (tasks[-1][0], end)  # Adjust the last task to cover the remaining range
 
-# Define a function to start a worker
-def start_worker(queue):
-    # Set up the worker socket
-    worker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    worker_socket.connect(('192.168.83.46', 5000))
+    for i, conn in enumerate(worker_connections):
+        task = tasks[i]
+        conn.sendall(pickle.dumps(task))
 
-    # Send tasks to the server and receive results
-    while True:
-        task = queue.get()
-        if task is None:
-            break
-        worker_socket.sendall(pickle.dumps(task))
-        result = pickle.loads(worker_socket.recv(1024))
-        print(result)
+    # Collect results from the workers
+    all_primes = []
+    for conn in worker_connections:
+        primes = pickle.loads(conn.recv(1024))
+        all_primes.extend(primes)
 
-    # Clean up the socket
-    worker_socket.close()
+    # Print the generated prime numbers
+    print("Generated prime numbers:")
+    for prime in all_primes:
+        print(prime)
 
-# Start the server
+    # Close the connections
+    for conn in worker_connections:
+        conn.close()
+
 if __name__ == '__main__':
     start_server()
