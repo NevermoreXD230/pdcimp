@@ -15,8 +15,11 @@ def fermat(n):
 def server(num_workers):
     primes_found = []
 
-    def worker_task(worker_id, num_queue, result_queue):
+    def worker_task(worker_id, result_queue):
         while True:
+            # Request a number from the server
+            result_queue.put(worker_id)  # Signal the server that the worker is ready
+
             num = num_queue.get()  # Wait for a number to test
             if num is None:
                 break
@@ -30,7 +33,7 @@ def server(num_workers):
     # Start worker processes
     workers = []
     for i in range(num_workers):
-        p = Process(target=worker_task, args=(i, num_queue, result_queue))
+        p = Process(target=worker_task, args=(i, result_queue))
         p.start()
         workers.append(p)
 
@@ -40,12 +43,19 @@ def server(num_workers):
             if next_number % p == 0:
                 break
         else:
-            num_queue.put(next_number)  # Send number to a worker for testing
+            num_queue.put(next_number)  # Send number to the queue for testing
+
+        # Wait for a worker to become available
+        worker_id = result_queue.get()
+        if worker_id is not None:
+            num = num_queue.get()  # Get the number to assign to the worker
+            result_queue.put((worker_id, num))  # Send the number to the worker
 
         while not result_queue.empty():
             worker_id, prime = result_queue.get()
-            primes_found.append(prime)
-            print(f"Worker {worker_id} found prime: {prime}")
+            if worker_id != worker_id:  # Skip the signal from the worker
+                primes_found.append(prime)
+                print(f"Worker {worker_id} found prime: {prime}")
 
         next_number += 1
 
