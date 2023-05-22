@@ -1,7 +1,10 @@
 import pika
 import random
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.74.205'))
+credentials = pika.PlainCredentials('your_username', 'your_password')
+parameters = pika.ConnectionParameters(host='192.168.74.205', credentials=credentials)
+
+connection = pika.BlockingConnection(parameters)
 channel = connection.channel()
 channel.queue_declare(queue='task_queue', durable=True)
 
